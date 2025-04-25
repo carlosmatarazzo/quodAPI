@@ -1,7 +1,7 @@
 package com.biometria.service;
 
 import com.biometria.model.BiometriaDigital;
-import com.biometria.repository.BiometriaDigitalRepository;
+import com.biometria.repository.BiometriaRepository; // Usando o repositório unificado
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -9,10 +9,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class BiometriaDigitalService {
 
-    private final BiometriaDigitalRepository biometriaDigitalRepository;
+    private final BiometriaRepository biometriaRepository; // Injetando o repositório unificado
 
     public BiometriaDigital salvarBiometriaDigital(BiometriaDigital biometriaDigital) {
-        // Aqui você pode adicionar lógica de validação ou processamento adicional
-        return biometriaDigitalRepository.save(biometriaDigital);
+        // Nenhuma lógica de processamento específica aqui agora
+        return biometriaRepository.save(biometriaDigital);
     }
 }

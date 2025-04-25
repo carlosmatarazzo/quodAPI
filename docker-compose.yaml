@@ -5,10 +5,20 @@ services:
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: <seu_usuario>
-      MONGO_INITDB_ROOT_PASSWORD: <sua_senha>
+      MONGO_INITDB_ROOT_USERNAME: user
+      MONGO_INITDB_ROOT_PASSWORD: 1234
     volumes:
       - mongodb_data:/data/db
+
+  biometria-app:
+    image: biometria-api-image # Substitua pelo NOME DA SUA IMAGEM DOCKER
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mongodb
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://user:1234@mongodb:27017/biometria_db?authSource=admin
 
 volumes:
   mongodb_data:
