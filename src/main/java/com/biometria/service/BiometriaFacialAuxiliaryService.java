@@ -1,10 +1,14 @@
 package com.biometria.service;
 
 import com.biometria.model.BiometriaFacial;
+import com.biometria.model.Dispositivo;
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
 import com.drew.metadata.Tag;
+import com.drew.metadata.exif.ExifIFD0Directory;
+import com.drew.metadata.exif.ExifSubIFDDirectory;
+import com.drew.metadata.exif.GpsDirectory;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base64;
 import org.springframework.stereotype.Service;
@@ -14,8 +18,13 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -26,53 +35,167 @@ public class BiometriaFacialAuxiliaryService {
             try {
                 byte[] decodedBytes = Base64.decodeBase64(biometriaFacial.getImagemBase64());
                 ByteArrayInputStream bis = new ByteArrayInputStream(decodedBytes);
-
                 BufferedImage bufferedImage = ImageIO.read(bis);
 
                 if (bufferedImage != null) {
                     ByteArrayInputStream bisForMetadata = new ByteArrayInputStream(decodedBytes);
                     Metadata metadata = ImageMetadataReader.readMetadata(bisForMetadata);
 
-                    Map<String, String> metadados = new HashMap<>();
+                    String fabricanteImagem = null;
+                    String modeloImagem = null;
+                    String dataHoraOriginal = null;
+                    Double latitudeImagem = null;
+                    Double longitudeImagem = null;
+                    String filenameImagem = null;
+                    String sistemaImagem = null;
+
                     for (Directory directory : metadata.getDirectories()) {
-                        for (Tag tag : directory.getTags()) {
-                            metadados.put(directory.getName() + " - " + tag.getTagName(), tag.getDescription());
+                        if (directory instanceof ExifIFD0Directory) {
+                            ExifIFD0Directory exifIFD0Directory = (ExifIFD0Directory) directory;
+                            fabricanteImagem = exifIFD0Directory.getString(ExifIFD0Directory.TAG_MAKE);
+                            modeloImagem = exifIFD0Directory.getString(ExifIFD0Directory.TAG_MODEL);
+                            sistemaImagem = exifIFD0Directory.getString(ExifIFD0Directory.TAG_SOFTWARE);
+                        } else if (directory instanceof ExifSubIFDDirectory) {
+                            ExifSubIFDDirectory exifSubIFDDirectory = (ExifSubIFDDirectory) directory;
+                            dataHoraOriginal = exifSubIFDDirectory.getString(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
+                        } else if (directory instanceof GpsDirectory) {
+                            GpsDirectory gpsDirectory = (GpsDirectory) directory;
+                            latitudeImagem = gpsDirectory.getGeoLocation() != null ? gpsDirectory.getGeoLocation().getLatitude() : null;
+                            longitudeImagem = gpsDirectory.getGeoLocation() != null ? gpsDirectory.getGeoLocation().getLongitude() : null;
+                        } else if (directory.getName().equalsIgnoreCase("File")) {
+                            for (Tag tag : directory.getTags()) {
+                                if (tag.getTagName().equalsIgnoreCase("File Name")) {
+                                    filenameImagem = tag.getDescription();
+                                }
+                            }
                         }
                     }
-                    biometriaFacial.setMetadados(new com.biometria.model.Metadados()); // Garante que o objeto metadados não seja nulo
-                    // Copia os metadados extraídos para o objeto Metadados
-                    if (metadados.containsKey("Exif SubIFD - GPS Latitude")) {
-                        biometriaFacial.getMetadados().setLatitude(converterCoordenada(metadados.get("Exif SubIFD - GPS Latitude")));
+
+                    Dispositivo dispositivoApi = biometriaFacial.getDispositivo();
+                    biometriaFacial.setFabricanteImagem(fabricanteImagem);
+                    biometriaFacial.setModeloImagem(modeloImagem);
+                    biometriaFacial.setDataImagem(parseDataHoraOriginal(dataHoraOriginal));
+                    biometriaFacial.setLatitudeImagem(latitudeImagem);
+                    biometriaFacial.setLongitudeImagem(longitudeImagem);
+                    biometriaFacial.setFilenameImagem(filenameImagem);
+                    biometriaFacial.setSistemaImagem(sistemaImagem);
+
+                    boolean dispositivoValido = false;
+                    boolean dataHoraValida = false;
+                    List<String> motivosInvalidade = new ArrayList<>();
+                    boolean dispositivoInformado = dispositivoApi != null &&
+                            StringUtils.hasText(dispositivoApi.getFabricante()) &&
+                            StringUtils.hasText(dispositivoApi.getModelo());
+                    boolean metadadosDispositivoPresentes = StringUtils.hasText(fabricanteImagem) &&
+                            StringUtils.hasText(modeloImagem);
+                    boolean dataHoraApiInformada = dispositivoApi != null &&
+                            StringUtils.hasText(dispositivoApi.getDataDispositivo());
+                    boolean dataHoraMetadadosPresente = StringUtils.hasText(dataHoraOriginal);
+                    boolean sistemaOperacionalInformado = dispositivoApi != null && StringUtils.hasText(dispositivoApi.getSistemaOperacional());
+                    boolean sistemaOperacionalMetadadosPresente = StringUtils.hasText(sistemaImagem);
+                    boolean sistemaOperacionalDivergente = sistemaOperacionalInformado && sistemaOperacionalMetadadosPresente &&
+                            !dispositivoApi.getSistemaOperacional().trim().equalsIgnoreCase(sistemaImagem.trim());
+
+                    // Comparação do fabricante e modelo
+                    if (dispositivoInformado && metadadosDispositivoPresentes) {
+                        if (dispositivoApi.getFabricante().trim().equalsIgnoreCase(fabricanteImagem.trim()) &&
+                                dispositivoApi.getModelo().trim().equalsIgnoreCase(modeloImagem.trim())) {
+                            dispositivoValido = true;
+                        } else {
+                            motivosInvalidade.add("dispositivo_divergente");
+                        }
+                    } else if (dispositivoInformado && !metadadosDispositivoPresentes) {
+                        motivosInvalidade.add("metadados_dispositivo_ausentes");
+                    } else if (!dispositivoInformado && metadadosDispositivoPresentes) {
+                        motivosInvalidade.add("dados_dispositivo_api_ausentes");
                     }
-                    if (metadados.containsKey("Exif SubIFD - GPS Longitude")) {
-                        biometriaFacial.getMetadados().setLongitude(converterCoordenada(metadados.get("Exif SubIFD - GPS Longitude")));
+
+                    // Comparação da data e hora (apenas dia, hora e minuto)
+                    if (dataHoraApiInformada && dataHoraMetadadosPresente) {
+                        String dataHoraApiFormatada = formatarDataHoraParaComparacao(dispositivoApi.getDataDispositivo());
+                        String dataHoraMetadadosFormatada = formatarDataHoraMetadadosParaComparacao(dataHoraOriginal);
+                        if (dataHoraApiFormatada != null && dataHoraMetadadosFormatada != null &&
+                                dataHoraApiFormatada.substring(0, 12).equals(dataHoraMetadadosFormatada.substring(0, 12))) {
+                            dataHoraValida = true;
+                        } else {
+                            motivosInvalidade.add("datahora_divergente");
+                        }
+                    } else if (dataHoraApiInformada && !dataHoraMetadadosPresente) {
+                        motivosInvalidade.add("metadados_datahora_ausentes");
+                    } else if (!dataHoraApiInformada && dataHoraMetadadosPresente) {
+                        motivosInvalidade.add("dados_datahora_api_ausentes");
                     }
-                    // O IP de origem virá da requisição, não dos metadados da imagem
+
+                    // Comparação do sistema operacional
+                    if (sistemaOperacionalDivergente) {
+                        motivosInvalidade.add("sistema_operacional_divergente");
+                    } else if (sistemaOperacionalInformado && !sistemaOperacionalMetadadosPresente) {
+                        motivosInvalidade.add("metadados_sistema_operacional_ausente");
+                    } else if (!sistemaOperacionalInformado && sistemaOperacionalMetadadosPresente) {
+                        motivosInvalidade.add("dados_sistema_operacional_api_ausentes");
+                    }
+
+
+                    // Define o status com base nas comparações
+                    if (dispositivoValido && dataHoraValida && motivosInvalidade.isEmpty()) {
+                        biometriaFacial.setStatus("válido");
+                    } else {
+                        if (!motivosInvalidade.isEmpty()) {
+                            biometriaFacial.setStatus("inválido_" + String.join("_", motivosInvalidade));
+                        } else {
+                            biometriaFacial.setStatus("indeterminado"); // Se nenhuma validação pôde ser feita
+                        }
+                    }
 
                 } else {
                     log.warn("Não foi possível ler a imagem facial para extrair metadados.");
+                    biometriaFacial.setStatus("erro_leitura_imagem");
                 }
 
-            } catch (IOException e) {
-                log.error("Erro ao decodificar a imagem Base64 ou ler metadados: {}", e.getMessage());
-            } catch (com.drew.imaging.ImageProcessingException e) {
-                log.error("Erro ao processar metadados da imagem facial: {}", e.getMessage());
+            } catch (IOException | com.drew.imaging.ImageProcessingException e) {
+                log.error("Erro ao processar imagem facial: {}", e.getMessage());
+                biometriaFacial.setStatus("erro_processamento");
             }
+        } else {
+            biometriaFacial.setStatus("sem_imagem");
         }
         return biometriaFacial;
     }
 
-    // Método auxiliar para converter coordenadas GPS (se necessário)
-    private Double converterCoordenada(String coordenadaDMS) {
-        // Lógica para converter graus, minutos e segundos para decimal
-        // Exemplo simplificado (precisa de implementação robusta)
-        if (coordenadaDMS != null) {
-            String[] parts = coordenadaDMS.split(",");
-            if (parts.length == 3) {
-                double graus = Double.parseDouble(parts[0].trim().split(" ")[0]);
-                double minutos = Double.parseDouble(parts[1].trim().split(" ")[0]);
-                double segundos = Double.parseDouble(parts[2].trim().split(" ")[0].replace("\"", ""));
-                return graus + (minutos / 60.0) + (segundos / 3600.0);
+    private String formatarDataHoraParaComparacao(String dataHoraApi) {
+        try {
+            SimpleDateFormat sdfApi = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            Date dateApi = sdfApi.parse(dataHoraApi.replaceAll("Z$", "+0000")); // Trata o 'Z' como UTC (+0000)
+            SimpleDateFormat sdfComparacao = new SimpleDateFormat("yyyyMMddHHmm", Locale.getDefault());
+            return sdfComparacao.format(dateApi);
+        } catch (ParseException e) {
+            log.warn("Erro ao formatar data/hora da API para comparação: {}", dataHoraApi);
+            return null;
+        }
+    }
+
+    private String formatarDataHoraMetadadosParaComparacao(String dataHoraOriginal) {
+        try {
+            DateFormat exifFormat = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault());
+            Date dateMetadados = exifFormat.parse(dataHoraOriginal);
+            SimpleDateFormat sdfComparacao = new SimpleDateFormat("yyyyMMddHHmm", Locale.getDefault());
+            return sdfComparacao.format(dateMetadados);
+        } catch (ParseException e) {
+            log.warn("Erro ao formatar data/hora dos metadados para comparação: {}", dataHoraOriginal);
+            return null;
+        }
+    }
+
+    private String parseDataHoraOriginal(String dataHoraOriginal) {
+        if (dataHoraOriginal != null) {
+            try {
+                DateFormat exifFormat = new SimpleDateFormat("yyyy:MM:dd HH:mm:ss", Locale.getDefault());
+                Date date = exifFormat.parse(dataHoraOriginal);
+                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault());
+                return sdf.format(date);
+            } catch (ParseException e) {
+                log.warn("Não foi possível parsear a data/hora original da imagem: {}", dataHoraOriginal);
+                return null;
             }
         }
         return null;

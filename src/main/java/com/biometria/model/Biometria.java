@@ -24,5 +24,5 @@ public abstract class Biometria {
     private String tipoBiometria;
     private String dataCaptura;
     private Dispositivo dispositivo;
-    private Metadados metadados;
+    private String status;
 }

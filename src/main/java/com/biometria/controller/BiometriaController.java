@@ -20,10 +20,10 @@ public class BiometriaController {
     @PostMapping("/receber")
     public ResponseEntity<Biometria> receberBiometria(@RequestBody Biometria biometria) {
         logger.info("Recebendo requisição POST para /api/biometria/receber");
-        logger.info("Objeto Biometria recebido (antes do service): {}", biometria); // Adicione este log
+        logger.info("Objeto Biometria recebido (antes do service): {}", biometria);
         if (biometria == null) {
             logger.error("Objeto Biometria chegou como null!");
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST); // Retorne um erro explícito
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
         Biometria savedBiometria = biometriaService.salvarBiometria(biometria);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedBiometria);
