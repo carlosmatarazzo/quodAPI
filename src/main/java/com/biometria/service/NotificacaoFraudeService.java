@@ -75,10 +75,8 @@ public class NotificacaoFraudeService {
 
     private boolean avaliarSeDeveNotificar(Biometria biometria) {
         if (biometria instanceof BiometriaDigital) {
-            // Para biometria digital, só notifica se falhou a autenticação
             return "falha_autenticacao".equalsIgnoreCase(biometria.getStatus());
         } else {
-            // Para facial e documento, notifica se não for válido
             return biometria.getStatus() != null && !biometria.getStatus().equalsIgnoreCase("válido");
         }
     }

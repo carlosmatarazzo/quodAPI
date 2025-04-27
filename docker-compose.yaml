@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 services:
   mongodb:
     image: mongo:latest
@@ -11,7 +11,7 @@ services:
       - mongodb_data:/data/db
 
   biometria-app:
-    image: biometria-api-image # Substitua pelo NOME DA SUA IMAGEM DOCKER
+    image: biometria-api-image
     ports:
       - "8080:8080"
     depends_on:

@@ -20,6 +20,6 @@ public class MongoConfig {
 
     @Bean
     public MongoTemplate mongoTemplate() {
-        return new MongoTemplate(mongoClient(), "biometria_db"); // Defina o nome do seu banco de dados
+        return new MongoTemplate(mongoClient(), "biometria_db");
     }
 }

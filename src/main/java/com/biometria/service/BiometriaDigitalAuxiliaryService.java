@@ -13,7 +13,7 @@ public class BiometriaDigitalAuxiliaryService {
         if (biometriaDigital == null) {
             throw new IllegalArgumentException("Objeto BiometriaDigital não pode ser nulo.");
         }
-        // Vamos usar o campo "status" para saber o resultado da autenticação no dispositivo
+
         if (!StringUtils.hasText(biometriaDigital.getStatus())) {
             log.warn("Status da biometria digital não informado.");
             biometriaDigital.setStatus("indeterminado");
