@@ -5,6 +5,6 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-public class BiometriaFacial extends BiometriaImagem {
+public class BiometriaDocumento extends BiometriaImagem {
     // No momento, nada extra
 }

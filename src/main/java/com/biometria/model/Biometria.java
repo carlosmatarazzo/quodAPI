@@ -16,7 +16,8 @@ import org.springframework.data.annotation.Id;
 )
 @JsonSubTypes({
         @JsonSubTypes.Type(value = BiometriaFacial.class, name = "facial"),
-        @JsonSubTypes.Type(value = BiometriaDigital.class, name = "digital")
+        @JsonSubTypes.Type(value = BiometriaDigital.class, name = "digital"),
+        @JsonSubTypes.Type(value = BiometriaDocumento.class, name = "documento")
 })
 public abstract class Biometria {
     @Id

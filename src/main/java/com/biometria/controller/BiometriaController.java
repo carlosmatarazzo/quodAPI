@@ -18,15 +18,18 @@ public class BiometriaController {
     private final BiometriaService biometriaService;
 
     @PostMapping("/receber")
-    public ResponseEntity<Biometria> receberBiometria(@RequestBody Biometria biometria) {
+    public ResponseEntity<Biometria> receberBiometria(@RequestBody Biometria biometria,
+                                                      @RequestHeader(value = "X-Forwarded-For", required = false) String ipOrigem) {
         logger.info("Recebendo requisição POST para /api/biometria/receber");
         logger.info("Objeto Biometria recebido (antes do service): {}", biometria);
+
         if (biometria == null) {
             logger.error("Objeto Biometria chegou como null!");
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
-        Biometria savedBiometria = biometriaService.salvarBiometria(biometria);
-        return ResponseEntity.status(HttpStatus.CREATED).body(savedBiometria);
+
+        Biometria resultadoProcessamento = biometriaService.processarBiometria(biometria, ipOrigem);
+        return ResponseEntity.status(HttpStatus.CREATED).body(resultadoProcessamento);
     }
 
     @GetMapping
